@@ -99,11 +99,6 @@ function createPanel(initialName = '') {
       const value = field.value;
       field.value = `${value.slice(0, start)}\n${value.slice(end)}`;
       field.selectionStart = field.selectionEnd = start + 1;
-      return;
-    }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      panel.form.requestSubmit();
     }
   });
   panel.nameInput.addEventListener('keydown', (e) => {

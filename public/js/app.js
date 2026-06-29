@@ -60,15 +60,10 @@ function insertNewlineAtCursor(field) {
   field.selectionStart = field.selectionEnd = start + 1;
 }
 
-function handleMessageInputKeydown(e, form) {
+function handleMessageInputKeydown(e) {
   if (e.key === ' ' && e.shiftKey) {
     e.preventDefault();
     insertNewlineAtCursor(e.currentTarget);
-    return;
-  }
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    form.requestSubmit();
   }
 }
 
@@ -176,9 +171,7 @@ chatForm.addEventListener('submit', (e) => {
   messageInput.value = '';
 });
 
-messageInput.addEventListener('keydown', (e) => {
-  handleMessageInputKeydown(e, chatForm);
-});
+messageInput.addEventListener('keydown', handleMessageInputKeydown);
 
 (async function bootstrap() {
   try {
