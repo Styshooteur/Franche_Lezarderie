@@ -7,13 +7,25 @@ let pool;
 function getPool() {
   if (!pool) {
     if (!process.env.DATABASE_URL) {
-      throw new Error('DATABASE_URL manquant — voir .env.example et DEPLOY.md');
+      throw new Error('DATABASE_URL manquant — ajoutez-le dans Render → Environment');
     }
+
+    const connectionString = process.env.DATABASE_URL;
+    const useSsl =
+      process.env.DATABASE_SSL === 'true' ||
+      connectionString.includes('supabase.co') ||
+      connectionString.includes('sslmode=require');
+
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.DATABASE_URL.includes('supabase.co')
-        ? { rejectUnauthorized: false }
-        : undefined,
+      connectionString,
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
+      connectionTimeoutMillis: 10000,
+      idleTimeoutMillis: 30000,
+      max: 10,
+    });
+
+    pool.on('error', (error) => {
+      console.error('Erreur pool PostgreSQL:', error.message);
     });
   }
   return pool;
@@ -21,33 +33,49 @@ function getPool() {
 
 async function initDb() {
   const db = getPool();
+  const timeoutMs = 15000;
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  const setup = async () => {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username TEXT UNIQUE NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      revealed_at TIMESTAMPTZ
-    )
-  `);
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id SERIAL PRIMARY KEY,
+        username TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        revealed_at TIMESTAMPTZ
+      )
+    `);
 
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS message_reveals (
-      message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-      username TEXT NOT NULL,
-      revealed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (message_id, username)
-    )
-  `);
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS message_reveals (
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        username TEXT NOT NULL,
+        revealed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (message_id, username)
+      )
+    `);
+  };
+
+  await Promise.race([
+    setup(),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            'Connexion Supabase impossible (timeout 15s). Vérifiez DATABASE_URL sur Render.'
+          )
+        );
+      }, timeoutMs);
+    }),
+  ]);
 }
 
 function parseCreatedAt(dateString) {

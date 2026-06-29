@@ -19,6 +19,7 @@ const {
   getServerTimeIso,
 } = require('./db');
 const { validateInviteCode } = require('./invites');
+const fs = require('fs');
 
 const PORT = process.env.PORT || 3000;
 const MESSAGE_LIMIT = 500;
@@ -66,13 +67,44 @@ function createSessionMiddleware() {
   });
 }
 
+function validateProductionEnv() {
+  const missing = [];
+  if (!process.env.DATABASE_URL) missing.push('DATABASE_URL');
+  if (!process.env.SESSION_SECRET) missing.push('SESSION_SECRET');
+
+  const hasInvites =
+    process.env.INVITE_CODES ||
+    fs.existsSync(path.join(__dirname, 'invites.json'));
+  if (!hasInvites) missing.push('INVITE_CODES');
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Variables manquantes sur Render → Environment : ${missing.join(', ')}`
+    );
+  }
+}
+
 async function start() {
+  if (process.env.NODE_ENV === 'production') {
+    validateProductionEnv();
+  }
+
+  console.log('Connexion à Supabase...');
   await initDb();
+  console.log('Base de données prête.');
 
   const sessionMiddleware = createSessionMiddleware();
-  const io = new Server(server);
+  const io = new Server(server, {
+    cors: {
+      origin: true,
+      credentials: true,
+    },
+  });
 
   app.set('trust proxy', 1);
+  app.get('/health', (_req, res) => {
+    res.status(200).json({ ok: true });
+  });
   app.use(express.json());
   app.use(sessionMiddleware);
   app.use(express.static(path.join(__dirname, 'public')));
@@ -192,8 +224,8 @@ async function start() {
     });
   });
 
-  server.listen(PORT, () => {
-    console.log(`Serveur actif → http://localhost:${PORT}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Serveur actif sur le port ${PORT}`);
   });
 }
 
