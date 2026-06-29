@@ -169,14 +169,18 @@ async function formatMessageForClient(row, viewerUsername, now = Date.now()) {
 
 async function fetchRecentForClient(limit = 50, viewerUsername, now = Date.now()) {
   const db = getPool();
+  const user = await findUserByUsername(viewerUsername);
+  if (!user) return [];
+
   const result = await db.query(
     `
       SELECT id, username, content, created_at, revealed_at
       FROM messages
+      WHERE created_at >= $2
       ORDER BY id DESC
       LIMIT $1
     `,
-    [limit]
+    [limit, user.created_at]
   );
 
   const rows = result.rows.reverse();
@@ -209,6 +213,11 @@ async function revealMessageForUser(id, username, now = Date.now()) {
   const row = existing.rows[0];
   if (!row || !username) return null;
   if (!isTransitComplete(row, now)) return null;
+
+  const user = await findUserByUsername(username);
+  if (!user || parseCreatedAt(row.created_at) < parseCreatedAt(user.created_at)) {
+    return null;
+  }
 
   if (!(await hasViewerRevealed(row, username))) {
     await db.query(
