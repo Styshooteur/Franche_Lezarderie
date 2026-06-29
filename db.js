@@ -6,17 +6,32 @@ const LIZARD_TRANSIT_MS = 10 * 60 * 1000;
 let pool;
 
 function assertSupabaseConnectionString(connectionString) {
-  if (!connectionString.includes('supabase.co')) return;
+  if (
+    !connectionString.includes('supabase.co') &&
+    !connectionString.includes('pooler.supabase.com')
+  ) {
+    return;
+  }
 
-  // Connexion directe (port 5432) : souvent IPv6 uniquement → échoue sur Render
+  const userMatch = connectionString.match(/\/\/([^:@/]+)/);
+  const user = userMatch?.[1] || '';
+
+  if (connectionString.includes('pooler.supabase.com') && user === 'postgres') {
+    throw new Error(
+      'DATABASE_URL pooler : le nom d\'utilisateur doit être postgres.VOTRE_REF (ex. postgres.abcdefgh), ' +
+        'pas seulement "postgres". Recopiez l\'URI entière depuis Supabase → Connect → Session pooler.'
+    );
+  }
+
+  // Connexion directe (port 5432 sur db.*) : IPv6 → échoue sur Render
   if (
     connectionString.includes('db.') &&
-    (connectionString.includes(':5432') || connectionString.endsWith('/postgres'))
+    connectionString.includes('.supabase.co') &&
+    !connectionString.includes('pooler')
   ) {
     throw new Error(
-      'DATABASE_URL utilise la connexion directe Supabase (port 5432). ' +
-        'Sur Render, utilisez la connexion "Session pooler" (port 6543) : ' +
-        'Supabase → Project Settings → Database → Connection string → Session pooler → URI'
+      'DATABASE_URL utilise la connexion directe Supabase. ' +
+        'Sur Render : Supabase → Connect → Session pooler → copiez l\'URI complète.'
     );
   }
 }
