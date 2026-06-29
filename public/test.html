@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mode test — Lezardière de la Confrérie</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="test-mode">
+  <div class="noise-overlay" aria-hidden="true"></div>
+
+  <header class="test-header">
+    <div class="test-header-text">
+      <h1 class="title">Mode test multi-utilisateurs</h1>
+      <p class="subtitle">Une fenêtre = une identité (cookie partagé dans le même navigateur). Pour tester plusieurs joueurs, ouvrez des fenêtres séparées avec ↗ ou la navigation privée.</p>
+    </div>
+    <div class="test-toolbar">
+      <input type="text" id="test-invite-input" class="text-input test-invite-input" maxlength="64" placeholder="Code d'invitation" autocomplete="off">
+      <button type="button" id="add-panel-btn" class="btn btn-primary">+ Ajouter un utilisateur</button>
+      <button type="button" id="demo-messages-btn" class="btn btn-send">Messages de démo</button>
+      <a href="/" class="btn btn-send test-back-link">Retour au chat</a>
+    </div>
+  </header>
+
+  <div id="panels-grid" class="test-panels"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/lizard-messages.js"></script>
+  <script src="/js/test.js"></script>
+</body>
+</html>
