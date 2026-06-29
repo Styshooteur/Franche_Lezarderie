@@ -201,10 +201,6 @@ async function start() {
       try {
         const row = await saveMessage(username, content.trim());
         io.emit('chat:lizard:sent', formatPublicMessage(row, Date.now()));
-        socket.emit(
-          'chat:lizard:revealed',
-          await formatMessageForClient(row, username, Date.now())
-        );
       } catch (error) {
         console.error(error);
       }

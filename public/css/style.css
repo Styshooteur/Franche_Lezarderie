@@ -344,6 +344,17 @@ body {
   border-color: rgba(106, 148, 144, 0.55);
 }
 
+/* Expéditeur : message en transit (vue locale uniquement) */
+.message.own.lizard-sender-transit {
+  opacity: 0.52;
+  filter: saturate(0.55);
+  transition: opacity 0.6s ease, filter 0.6s ease;
+}
+
+.message.own.lizard-sender-transit.lizard-pending {
+  cursor: default;
+}
+
 .lizard-placeholder {
   font-style: italic;
   opacity: 0.92;

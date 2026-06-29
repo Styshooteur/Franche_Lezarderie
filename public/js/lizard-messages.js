@@ -1,6 +1,7 @@
 const LizardMessages = (() => {
   const TRANSIT_MS = 10 * 60 * 1000;
   const TICK_MS = 1000;
+  const SENT_IDS_KEY = 'lizard_sent_in_transit';
 
   let serverOffset = 0;
   let tickTimer = null;
@@ -44,6 +45,45 @@ const LizardMessages = (() => {
     return getRemainingRatio(msg.created_at) <= 0 ? 'ready' : 'transit';
   }
 
+  function isOwnMessage(msg, currentUsername) {
+    return Boolean(currentUsername && msg.username === currentUsername);
+  }
+
+  function loadSentInTransitIds() {
+    try {
+      const raw = localStorage.getItem(SENT_IDS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.map(Number).filter((id) => id > 0) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveSentInTransitIds(ids) {
+    localStorage.setItem(SENT_IDS_KEY, JSON.stringify([...new Set(ids)]));
+  }
+
+  function rememberSentInTransit(messageId) {
+    const ids = loadSentInTransitIds();
+    if (!ids.includes(messageId)) {
+      ids.push(messageId);
+      saveSentInTransitIds(ids);
+    }
+  }
+
+  function forgetSentInTransit(messageId) {
+    const ids = loadSentInTransitIds().filter((id) => id !== messageId);
+    saveSentInTransitIds(ids);
+  }
+
+  function shouldApplySenderTransit(msg, currentUsername) {
+    if (!isOwnMessage(msg, currentUsername)) return false;
+    if (msg.status === 'revealed' || msg.content) return false;
+    const status = getEffectiveStatus(msg);
+    if (status === 'ready') return false;
+    return true;
+  }
+
   function placeholderText(msg) {
     return `[${msg.username}] a envoyé un lézard messager`;
   }
@@ -58,11 +98,18 @@ const LizardMessages = (() => {
     `;
   }
 
-  function buildPendingHtml(msg, status) {
-    const readyHint =
-      status === 'ready'
-        ? '<p class="lizard-ready-hint">Cliquer pour révéler</p>'
-        : '';
+  function buildPendingHtml(msg, status, options = {}) {
+    const { showProgress = true, showReadyHint = status === 'ready' } = options;
+
+    const progressHtml = showProgress
+      ? `<div class="lizard-progress${status === 'ready' ? ' lizard-progress-ready' : ''}" aria-hidden="true">
+        <div class="lizard-progress-fill"></div>
+      </div>`
+      : '';
+
+    const readyHint = showReadyHint
+      ? '<p class="lizard-ready-hint">Cliquer pour révéler</p>'
+      : '';
 
     return `
       <div class="message-header">
@@ -70,14 +117,13 @@ const LizardMessages = (() => {
         <time class="message-time">${formatTime(msg.created_at)}</time>
       </div>
       <p class="message-content lizard-placeholder">${escapeHtml(placeholderText(msg))}</p>
-      <div class="lizard-progress${status === 'ready' ? ' lizard-progress-ready' : ''}" aria-hidden="true">
-        <div class="lizard-progress-fill"></div>
-      </div>
+      ${progressHtml}
       ${readyHint}
     `;
   }
 
   function markReady(el) {
+    el.classList.remove('lizard-sender-transit');
     el.classList.add('lizard-ready');
     el.dataset.status = 'ready';
     el.setAttribute('role', 'button');
@@ -94,7 +140,17 @@ const LizardMessages = (() => {
     }
   }
 
-  function updateProgressElement(el, createdAt) {
+  function clearSenderTransitVisual(el) {
+    el.classList.remove('lizard-sender-transit');
+    el.querySelector('.lizard-progress')?.remove();
+    el.querySelector('.lizard-ready-hint')?.remove();
+    el.removeAttribute('role');
+    el.removeAttribute('tabindex');
+    el.classList.remove('lizard-ready');
+    el.dataset.status = 'ready';
+  }
+
+  function updateProgressElement(el, createdAt, senderOwn = false) {
     const ratio = getRemainingRatio(createdAt);
     const fill = el.querySelector('.lizard-progress-fill');
     if (fill) {
@@ -102,7 +158,12 @@ const LizardMessages = (() => {
     }
 
     if (ratio <= 0) {
-      markReady(el);
+      if (senderOwn) {
+        clearSenderTransitVisual(el);
+        forgetSentInTransit(Number(el.dataset.id));
+      } else {
+        markReady(el);
+      }
       tracked.delete(el);
       return 'ready';
     }
@@ -116,24 +177,54 @@ const LizardMessages = (() => {
     el.dataset.status = 'revealed';
     el.removeAttribute('role');
     el.removeAttribute('tabindex');
+    el.classList.remove('lizard-sender-transit', 'lizard-ready');
     el.innerHTML = buildRevealedHtml(msg);
     tracked.delete(el);
+    if (isOwn) {
+      forgetSentInTransit(Number(msg.id));
+    }
+  }
+
+  function attachRevealHandlers(el, msg, socket, isOwn) {
+    const onReveal = () => {
+      if (el.dataset.status !== 'ready') return;
+      if (!socket?.connected) return;
+      socket.emit('chat:lizard:reveal', { messageId: msg.id });
+    };
+
+    el.addEventListener('click', onReveal);
+    el.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      onReveal();
+    });
+
+    if (!isOwn) {
+      return;
+    }
+
+    el.removeAttribute('role');
+    el.removeAttribute('tabindex');
   }
 
   function mountMessage(container, msg, currentUsername, socket, options = {}) {
     const { scroll = true } = options;
     const existing = container.querySelector(`[data-id="${msg.id}"]`);
+    const isOwn = isOwnMessage(msg, currentUsername);
+    const senderTransit = shouldApplySenderTransit(msg, currentUsername);
 
     if (existing) {
       if (msg.status === 'revealed' || msg.content) {
-        revealElement(existing, msg, msg.username === currentUsername);
+        revealElement(existing, msg, isOwn);
+      } else if (senderTransit) {
+        existing.classList.add('lizard-sender-transit');
+        updateProgressElement(existing, msg.created_at, true);
       } else {
-        updateProgressElement(existing, msg.created_at);
+        updateProgressElement(existing, msg.created_at, false);
       }
       return existing;
     }
 
-    const isOwn = msg.username === currentUsername;
     const el = document.createElement('article');
     el.className = `message ${isOwn ? 'own' : 'other'}`;
     el.dataset.id = msg.id;
@@ -145,29 +236,43 @@ const LizardMessages = (() => {
       el.innerHTML = buildRevealedHtml(msg);
     } else {
       const status = getEffectiveStatus(msg);
+
       el.classList.add('lizard-pending');
       el.dataset.status = status;
-      el.innerHTML = buildPendingHtml(msg, status);
 
-      const onReveal = () => {
-        if (el.dataset.status !== 'ready') return;
-        if (!socket?.connected) return;
-        socket.emit('chat:lizard:reveal', { messageId: msg.id });
-      };
-
-      el.addEventListener('click', onReveal);
-      el.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        event.preventDefault();
-        onReveal();
-      });
-
-      if (status === 'ready') {
-        markReady(el);
+      if (senderTransit) {
+        el.classList.add('lizard-sender-transit');
+        el.dataset.senderOwn = 'true';
+        rememberSentInTransit(msg.id);
+        el.innerHTML = buildPendingHtml(msg, status, {
+          showProgress: true,
+          showReadyHint: false,
+        });
+      } else if (isOwn && status === 'ready') {
+        el.innerHTML = buildPendingHtml(msg, status, {
+          showProgress: false,
+          showReadyHint: false,
+        });
+        forgetSentInTransit(msg.id);
       } else {
-        tracked.set(el, msg.created_at);
-        updateProgressElement(el, msg.created_at);
+        el.innerHTML = buildPendingHtml(msg, status, {
+          showProgress: true,
+          showReadyHint: status === 'ready',
+        });
+      }
+
+      attachRevealHandlers(el, msg, socket, isOwn);
+
+      if (senderTransit && status === 'transit') {
+        tracked.set(el, { createdAt: msg.created_at, senderOwn: true });
+        updateProgressElement(el, msg.created_at, true);
         ensureTick();
+      } else if (!isOwn && status === 'transit') {
+        tracked.set(el, { createdAt: msg.created_at, senderOwn: false });
+        updateProgressElement(el, msg.created_at, false);
+        ensureTick();
+      } else if (!isOwn && status === 'ready') {
+        markReady(el);
       }
     }
 
@@ -186,9 +291,20 @@ const LizardMessages = (() => {
       setServerTime(payload.serverTime);
     }
 
+    const sentIds = new Set(loadSentInTransitIds());
+
     container.innerHTML = '';
     tracked.clear();
     messages.forEach((msg) => {
+      const isOwn = isOwnMessage(msg, currentUsername);
+      if (
+        isOwn &&
+        msg.status !== 'revealed' &&
+        !msg.content &&
+        (sentIds.has(msg.id) || getEffectiveStatus(msg) === 'transit')
+      ) {
+        rememberSentInTransit(msg.id);
+      }
       mountMessage(container, msg, currentUsername, socket, { scroll: false });
     });
     container.scrollTop = container.scrollHeight;
@@ -196,13 +312,16 @@ const LizardMessages = (() => {
   }
 
   function handleSent(container, msg, currentUsername, socket) {
+    if (isOwnMessage(msg, currentUsername)) {
+      rememberSentInTransit(msg.id);
+    }
     mountMessage(container, msg, currentUsername, socket);
   }
 
   function handleRevealed(container, msg, currentUsername) {
     const el = container.querySelector(`[data-id="${msg.id}"]`);
     if (el) {
-      revealElement(el, msg, msg.username === currentUsername);
+      revealElement(el, msg, isOwnMessage(msg, currentUsername));
       return;
     }
     mountMessage(container, msg, currentUsername, null);
@@ -214,12 +333,12 @@ const LizardMessages = (() => {
       return;
     }
 
-    for (const [el, createdAt] of [...tracked.entries()]) {
+    for (const [el, entry] of [...tracked.entries()]) {
       if (!el.isConnected) {
         tracked.delete(el);
         continue;
       }
-      updateProgressElement(el, createdAt);
+      updateProgressElement(el, entry.createdAt, entry.senderOwn);
     }
   }
 

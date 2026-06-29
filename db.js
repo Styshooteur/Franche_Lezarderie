@@ -126,7 +126,6 @@ function isTransitComplete(row, now = Date.now()) {
 
 async function hasViewerRevealed(row, viewerUsername) {
   if (!viewerUsername) return false;
-  if (row.username === viewerUsername) return true;
   if (row.revealed_at) return true;
 
   const db = getPool();
