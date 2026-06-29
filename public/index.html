@@ -60,15 +60,15 @@
     <main id="messages-container" class="messages-container" role="log" aria-live="polite"></main>
 
     <form id="chat-form" class="chat-form">
-      <input
-        type="text"
+      <textarea
         id="message-input"
         class="text-input message-input"
         maxlength="500"
         autocomplete="off"
         spellcheck="false"
+        rows="1"
         placeholder="Transmettre un message chiffré..."
-      >
+      ></textarea>
       <button type="submit" class="btn btn-send btn-icon" aria-label="Envoyer">
         <img src="/img/lizard-send.png" alt="" class="lizard-icon" aria-hidden="true">
       </button>
@@ -77,6 +77,6 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/lizard-messages.js?v=3"></script>
-  <script src="/js/app.js?v=3"></script>
+  <script src="/js/app.js?v=4"></script>
 </body>
 </html>

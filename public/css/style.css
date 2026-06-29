@@ -447,6 +447,13 @@ body {
   font-size: calc(0.75rem + 3px);
   line-height: 1.3;
   box-sizing: border-box;
+  resize: none;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  outline: none;
+  font-family: 'Courier New', Courier, monospace;
+  color: var(--text-main);
+  background: var(--bg-main);
 }
 
 #chat-screen .message-input {

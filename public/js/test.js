@@ -58,7 +58,7 @@ function createPanel(initialName = '') {
     </header>
     <main class="test-panel-messages messages-container" role="log"></main>
     <form class="test-panel-form chat-form">
-      <input type="text" class="text-input message-input test-panel-input" maxlength="500" placeholder="Message..." disabled>
+      <textarea class="text-input message-input test-panel-input" maxlength="500" rows="1" placeholder="Message..." disabled></textarea>
       <button type="submit" class="btn btn-send btn-icon" disabled aria-label="Envoyer">
         ${SEND_BUTTON_ICON}
       </button>
@@ -89,6 +89,22 @@ function createPanel(initialName = '') {
   panel.form.addEventListener('submit', (e) => {
     e.preventDefault();
     sendMessage(panel);
+  });
+  panel.messageInput.addEventListener('keydown', (e) => {
+    if (e.key === ' ' && e.shiftKey) {
+      e.preventDefault();
+      const field = e.currentTarget;
+      const start = field.selectionStart;
+      const end = field.selectionEnd;
+      const value = field.value;
+      field.value = `${value.slice(0, start)}\n${value.slice(end)}`;
+      field.selectionStart = field.selectionEnd = start + 1;
+      return;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      panel.form.requestSubmit();
+    }
   });
   panel.nameInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {

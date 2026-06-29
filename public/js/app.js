@@ -52,6 +52,26 @@ function hideWelcomeError() {
   welcomeError.classList.add('hidden');
 }
 
+function insertNewlineAtCursor(field) {
+  const start = field.selectionStart;
+  const end = field.selectionEnd;
+  const value = field.value;
+  field.value = `${value.slice(0, start)}\n${value.slice(end)}`;
+  field.selectionStart = field.selectionEnd = start + 1;
+}
+
+function handleMessageInputKeydown(e, form) {
+  if (e.key === ' ' && e.shiftKey) {
+    e.preventDefault();
+    insertNewlineAtCursor(e.currentTarget);
+    return;
+  }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    form.requestSubmit();
+  }
+}
+
 function setConnectionState(state) {
   connectionStatus.className = 'status-dot ' + state;
   const labels = {
@@ -157,10 +177,7 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 messageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    chatForm.requestSubmit();
-  }
+  handleMessageInputKeydown(e, chatForm);
 });
 
 (async function bootstrap() {
