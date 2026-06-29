@@ -1,8 +1,25 @@
+const dns = require('dns');
 const { Pool } = require('pg');
 
 const LIZARD_TRANSIT_MS = 10 * 60 * 1000;
 
 let pool;
+
+function assertSupabaseConnectionString(connectionString) {
+  if (!connectionString.includes('supabase.co')) return;
+
+  // Connexion directe (port 5432) : souvent IPv6 uniquement → échoue sur Render
+  if (
+    connectionString.includes('db.') &&
+    (connectionString.includes(':5432') || connectionString.endsWith('/postgres'))
+  ) {
+    throw new Error(
+      'DATABASE_URL utilise la connexion directe Supabase (port 5432). ' +
+        'Sur Render, utilisez la connexion "Session pooler" (port 6543) : ' +
+        'Supabase → Project Settings → Database → Connection string → Session pooler → URI'
+    );
+  }
+}
 
 function getPool() {
   if (!pool) {
@@ -11,6 +28,8 @@ function getPool() {
     }
 
     const connectionString = process.env.DATABASE_URL;
+    assertSupabaseConnectionString(connectionString);
+
     const useSsl =
       process.env.DATABASE_SSL === 'true' ||
       connectionString.includes('supabase.co') ||
@@ -22,6 +41,10 @@ function getPool() {
       connectionTimeoutMillis: 10000,
       idleTimeoutMillis: 30000,
       max: 10,
+      // Render n'atteint pas toujours l'IPv6 Supabase
+      lookup: (hostname, options, callback) => {
+        dns.lookup(hostname, { family: 4 }, callback);
+      },
     });
 
     pool.on('error', (error) => {
