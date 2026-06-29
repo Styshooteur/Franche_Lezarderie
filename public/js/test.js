@@ -2,7 +2,7 @@ const SEND_BUTTON_ICON =
   '<img src="/img/lizard-send.png" alt="" class="lizard-icon" aria-hidden="true">';
 const USERNAME_MIN = 3;
 const USERNAME_MAX = 30;
-const USERNAME_REGEX = /^[\p{L} ]+$/u;
+const USERNAME_REGEX = /^[\p{L} '\u2019-]+$/u;
 const MAX_PANELS = 6;
 
 const panelsGrid = document.getElementById('panels-grid');

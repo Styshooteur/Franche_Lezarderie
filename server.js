@@ -43,7 +43,7 @@ function validateUsername(username) {
   return (
     trimmed.length >= USERNAME_MIN &&
     trimmed.length <= USERNAME_MAX &&
-    /^[\p{L} ]+$/u.test(trimmed)
+    /^[\p{L} '\u2019-]+$/u.test(trimmed)
   );
 }
 
@@ -148,7 +148,7 @@ async function start() {
 
       if (!validateUsername(username)) {
         return res.status(400).json({
-          error: 'Identité invalide : 3 à 30 caractères, lettres et espaces uniquement.',
+          error: 'Identité invalide : 3 à 30 caractères, lettres, espaces, tirets et apostrophes uniquement.',
         });
       }
 

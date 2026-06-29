@@ -1,6 +1,6 @@
 const USERNAME_MIN = 3;
 const USERNAME_MAX = 30;
-const USERNAME_REGEX = /^[\p{L} ]+$/u;
+const USERNAME_REGEX = /^[\p{L} '\u2019-]+$/u;
 
 const welcomeScreen = document.getElementById('welcome-screen');
 const chatScreen = document.getElementById('chat-screen');
@@ -144,7 +144,7 @@ welcomeForm.addEventListener('submit', async (e) => {
 
   if (!validateUsername(name)) {
     showWelcomeError(
-      'Identité invalide : 3 à 30 caractères, lettres et espaces uniquement.'
+      'Identité invalide : 3 à 30 caractères, lettres, espaces, tirets et apostrophes uniquement.'
     );
     return;
   }
