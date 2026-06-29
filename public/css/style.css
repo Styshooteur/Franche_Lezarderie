@@ -420,8 +420,8 @@ body {
 .chat-form {
   display: grid;
   grid-template-columns: 75% 25%;
-  align-items: stretch;
-  padding: 0.25rem 1.25rem;
+  align-items: center;
+  padding: 0.35rem 1.25rem;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-rust);
   flex-shrink: 0;
@@ -431,7 +431,8 @@ body {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 0.18rem 0.5rem;
+  height: 2.35rem;
+  padding: 0.25rem 0.65rem;
   font-size: calc(0.75rem + 3px);
   line-height: 1.3;
 }
@@ -448,12 +449,13 @@ body {
   align-items: center;
   justify-content: center;
   justify-self: center;
-  align-self: stretch;
-  width: 60%;
-  max-width: 60%;
+  align-self: center;
+  width: 2.35rem;
+  height: 2.35rem;
+  max-width: 2.35rem;
   min-width: 0;
-  min-height: 1rem;
-  padding: 0.05rem;
+  min-height: 0;
+  padding: 0.15rem;
   line-height: 0;
   overflow: hidden;
 }
@@ -461,6 +463,7 @@ body {
 .btn-send.btn-icon .lizard-icon {
   width: 100%;
   height: 100%;
+  max-height: 100%;
   object-fit: contain;
   display: block;
   filter: brightness(0.96) saturate(0.88);
@@ -492,8 +495,14 @@ body {
   }
 
   .btn-send.btn-icon {
-    padding: 0.05rem;
-    min-height: 0.9rem;
+    width: 2.1rem;
+    height: 2.1rem;
+    max-width: 2.1rem;
+    padding: 0.12rem;
+  }
+
+  .message-input {
+    height: 2.1rem;
   }
 }
 
