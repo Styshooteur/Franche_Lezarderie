@@ -70,6 +70,7 @@ function createPanel(initialName = '') {
   const panel = {
     el: panelEl,
     username: null,
+    pendingSentContent: null,
     socket: null,
     nameInput: panelEl.querySelector('.test-panel-name'),
     statusDot: panelEl.querySelector('.test-panel-status'),
@@ -167,7 +168,12 @@ async function connectPanel(panel) {
   });
 
   panel.socket.on('chat:lizard:sent', (msg) => {
-    LizardMessages.handleSent(panel.messagesEl, msg, panel.username, panel.socket);
+    const sentContent =
+      panel.pendingSentContent && msg.username === panel.username
+        ? panel.pendingSentContent
+        : null;
+    panel.pendingSentContent = null;
+    LizardMessages.handleSent(panel.messagesEl, msg, panel.username, panel.socket, sentContent);
   });
 
   panel.socket.on('chat:lizard:revealed', (msg) => {
@@ -180,6 +186,7 @@ function sendMessage(panel) {
   if (!panel.socket?.connected || !panel.username) return;
   const content = panel.messageInput.value.trim();
   if (!content) return;
+  panel.pendingSentContent = content;
   panel.socket.emit('chat:message', { content });
   panel.messageInput.value = '';
 }

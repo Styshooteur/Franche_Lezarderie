@@ -17,6 +17,7 @@ const currentUserLabel = document.getElementById('current-user-label');
 
 let socket = null;
 let username = null;
+let pendingSentContent = null;
 
 function validateUsername(name) {
   const trimmed = name.trim();
@@ -102,7 +103,10 @@ function initSocket() {
   });
 
   socket.on('chat:lizard:sent', (msg) => {
-    LizardMessages.handleSent(messagesContainer, msg, username, socket);
+    const sentContent =
+      pendingSentContent && msg.username === username ? pendingSentContent : null;
+    pendingSentContent = null;
+    LizardMessages.handleSent(messagesContainer, msg, username, socket, sentContent);
   });
 
   socket.on('chat:lizard:revealed', (msg) => {
@@ -147,6 +151,7 @@ chatForm.addEventListener('submit', (e) => {
   const content = messageInput.value.trim();
   if (!content) return;
 
+  pendingSentContent = content;
   socket.emit('chat:message', { content });
   messageInput.value = '';
 });

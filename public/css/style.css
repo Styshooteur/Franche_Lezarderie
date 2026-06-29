@@ -347,8 +347,8 @@ body {
 /* Expéditeur : message en transit (vue locale uniquement) */
 .message.own.lizard-sender-transit {
   position: relative;
-  opacity: 0.48;
-  filter: saturate(0.35) brightness(0.72);
+  opacity: 0.74;
+  filter: saturate(0.55) brightness(0.9);
   transition: opacity 0.6s ease, filter 0.6s ease;
 }
 
@@ -356,7 +356,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.12);
   pointer-events: none;
   border-radius: inherit;
 }

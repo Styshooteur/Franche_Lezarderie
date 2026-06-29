@@ -2,6 +2,7 @@ const LizardMessages = (() => {
   const TRANSIT_MS = 10 * 60 * 1000;
   const TICK_MS = 1000;
   const SENT_IDS_KEY = 'lizard_sent_in_transit';
+  const SENT_CONTENT_KEY = 'lizard_sent_content';
   const USERNAME_KEY = 'lizard_username';
 
   let serverOffset = 0;
@@ -105,6 +106,88 @@ const LizardMessages = (() => {
     saveSentInTransitIds(ids);
   }
 
+  function loadSentContentMap() {
+    try {
+      const raw = localStorage.getItem(SENT_CONTENT_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveSentContentMap(map) {
+    localStorage.setItem(SENT_CONTENT_KEY, JSON.stringify(map));
+  }
+
+  function rememberSentContent(messageId, content) {
+    if (!messageId || !content) return;
+    const map = loadSentContentMap();
+    map[String(messageId)] = content;
+    saveSentContentMap(map);
+  }
+
+  function getSentContent(messageId) {
+    const map = loadSentContentMap();
+    return map[String(messageId)] || null;
+  }
+
+  function forgetSentContent(messageId) {
+    const map = loadSentContentMap();
+    delete map[String(messageId)];
+    saveSentContentMap(map);
+  }
+
+  function buildMsgFromElement(el, content) {
+    return {
+      id: Number(el.dataset.id),
+      username: el.querySelector('.message-author')?.textContent?.trim() || getStoredUsername(),
+      created_at: el.dataset.createdAt,
+      content,
+      status: 'revealed',
+    };
+  }
+
+  function requestSenderReveal(messageId, socket) {
+    if (!socket?.connected || !messageId) return;
+    socket.emit('chat:lizard:reveal', { messageId });
+  }
+
+  function finishSenderTransit(el, socket) {
+    const messageId = Number(el.dataset.id);
+    const cachedContent = getSentContent(messageId);
+
+    if (cachedContent) {
+      revealElement(el, buildMsgFromElement(el, cachedContent), true);
+      forgetSentContent(messageId);
+      requestSenderReveal(messageId, socket);
+      return;
+    }
+
+    requestSenderReveal(messageId, socket);
+    clearSenderTransitVisual(el);
+  }
+
+  function tryAutoRevealOwnReady(el, msg, socket) {
+    const cachedContent = getSentContent(msg.id);
+    if (cachedContent) {
+      revealElement(el, { ...msg, content: cachedContent, status: 'revealed' }, true);
+      forgetSentContent(msg.id);
+      forgetSentInTransit(msg.id);
+      requestSenderReveal(msg.id, socket);
+      return true;
+    }
+
+    if (msg.content) {
+      revealElement(el, msg, true);
+      forgetSentInTransit(msg.id);
+      return true;
+    }
+
+    requestSenderReveal(msg.id, socket);
+    return false;
+  }
+
   function isSenderInTransit(msg, currentUsername) {
     if (msg.status === 'revealed' || msg.content) return false;
     if (getEffectiveStatus(msg) !== 'transit') return false;
@@ -180,7 +263,7 @@ const LizardMessages = (() => {
     el.dataset.status = 'ready';
   }
 
-  function updateProgressElement(el, createdAt, senderOwn = false) {
+  function updateProgressElement(el, createdAt, senderOwn = false, socket = null) {
     const ratio = getRemainingRatio(createdAt);
     const fill = el.querySelector('.lizard-progress-fill');
     if (fill) {
@@ -189,8 +272,7 @@ const LizardMessages = (() => {
 
     if (ratio <= 0) {
       if (senderOwn) {
-        clearSenderTransitVisual(el);
-        forgetSentInTransit(Number(el.dataset.id));
+        finishSenderTransit(el, socket);
       } else {
         markReady(el);
       }
@@ -207,11 +289,13 @@ const LizardMessages = (() => {
     el.dataset.status = 'revealed';
     el.removeAttribute('role');
     el.removeAttribute('tabindex');
-    el.classList.remove('lizard-sender-transit', 'lizard-ready');
+    el.classList.remove('lizard-sender-transit', 'lizard-ready', 'lizard-pending');
+    delete el.dataset.senderOwn;
     el.innerHTML = buildRevealedHtml(msg);
     tracked.delete(el);
     if (isOwn) {
       forgetSentInTransit(Number(msg.id));
+      forgetSentContent(Number(msg.id));
     }
   }
 
@@ -250,14 +334,14 @@ const LizardMessages = (() => {
         existing.classList.add('own', 'lizard-sender-transit');
         existing.classList.remove('other');
         existing.dataset.senderOwn = 'true';
-        updateProgressElement(existing, msg.created_at, true);
+        updateProgressElement(existing, msg.created_at, true, socket);
         if (!tracked.has(existing)) {
-          tracked.set(existing, { createdAt: msg.created_at, senderOwn: true });
+          tracked.set(existing, { createdAt: msg.created_at, senderOwn: true, socket });
           ensureTick();
         }
       } else {
         const senderOwn = existing.dataset.senderOwn === 'true';
-        updateProgressElement(existing, msg.created_at, senderOwn);
+        updateProgressElement(existing, msg.created_at, senderOwn, socket);
       }
       return existing;
     }
@@ -286,11 +370,13 @@ const LizardMessages = (() => {
           showReadyHint: false,
         });
       } else if (isOwn && status === 'ready') {
+        el.classList.add('lizard-pending');
+        el.dataset.status = 'ready';
         el.innerHTML = buildPendingHtml(msg, status, {
           showProgress: false,
           showReadyHint: false,
         });
-        forgetSentInTransit(msg.id);
+        tryAutoRevealOwnReady(el, msg, socket);
       } else {
         el.innerHTML = buildPendingHtml(msg, status, {
           showProgress: true,
@@ -298,15 +384,17 @@ const LizardMessages = (() => {
         });
       }
 
-      attachRevealHandlers(el, msg, socket, isOwn);
+      if (!isOwn) {
+        attachRevealHandlers(el, msg, socket, isOwn);
+      }
 
       if (senderTransit && status === 'transit') {
-        tracked.set(el, { createdAt: msg.created_at, senderOwn: true });
-        updateProgressElement(el, msg.created_at, true);
+        tracked.set(el, { createdAt: msg.created_at, senderOwn: true, socket });
+        updateProgressElement(el, msg.created_at, true, socket);
         ensureTick();
       } else if (!isOwn && status === 'transit') {
-        tracked.set(el, { createdAt: msg.created_at, senderOwn: false });
-        updateProgressElement(el, msg.created_at, false);
+        tracked.set(el, { createdAt: msg.created_at, senderOwn: false, socket });
+        updateProgressElement(el, msg.created_at, false, socket);
         ensureTick();
       } else if (!isOwn && status === 'ready') {
         markReady(el);
@@ -348,9 +436,12 @@ const LizardMessages = (() => {
     ensureTick();
   }
 
-  function handleSent(container, msg, currentUsername, socket) {
+  function handleSent(container, msg, currentUsername, socket, sentContent = null) {
     if (isOwnMessage(msg, currentUsername)) {
       rememberSentInTransit(msg.id);
+      if (sentContent) {
+        rememberSentContent(msg.id, sentContent);
+      }
     }
     mountMessage(container, msg, currentUsername, socket);
   }
@@ -375,7 +466,7 @@ const LizardMessages = (() => {
         tracked.delete(el);
         continue;
       }
-      updateProgressElement(el, entry.createdAt, entry.senderOwn);
+      updateProgressElement(el, entry.createdAt, entry.senderOwn, entry.socket);
     }
   }
 
