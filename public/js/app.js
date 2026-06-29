@@ -132,6 +132,7 @@ welcomeForm.addEventListener('submit', async (e) => {
 
   try {
     username = await joinWithInvite(inviteCode, name);
+    LizardMessages.setStoredUsername(username);
     initSocket();
     showChat();
   } catch (error) {
@@ -162,6 +163,7 @@ messageInput.addEventListener('keydown', (e) => {
     const existingUser = await fetchMe();
     if (existingUser) {
       username = existingUser;
+      LizardMessages.setStoredUsername(username);
       initSocket();
       showChat();
       return;

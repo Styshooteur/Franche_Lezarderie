@@ -2,6 +2,7 @@ const LizardMessages = (() => {
   const TRANSIT_MS = 10 * 60 * 1000;
   const TICK_MS = 1000;
   const SENT_IDS_KEY = 'lizard_sent_in_transit';
+  const USERNAME_KEY = 'lizard_username';
 
   let serverOffset = 0;
   let tickTimer = null;
@@ -45,8 +46,36 @@ const LizardMessages = (() => {
     return getRemainingRatio(msg.created_at) <= 0 ? 'ready' : 'transit';
   }
 
+  function getStoredUsername() {
+    try {
+      return localStorage.getItem(USERNAME_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function setStoredUsername(name) {
+    try {
+      if (name) {
+        localStorage.setItem(USERNAME_KEY, name);
+      }
+    } catch {
+      // stockage indisponible
+    }
+  }
+
+  function usernamesMatch(a, b) {
+    if (!a || !b) return false;
+    return a.trim() === b.trim();
+  }
+
   function isOwnMessage(msg, currentUsername) {
-    return Boolean(currentUsername && msg.username === currentUsername);
+    const author = msg.username;
+    const stored = getStoredUsername();
+    return (
+      usernamesMatch(author, currentUsername) ||
+      usernamesMatch(author, stored)
+    );
   }
 
   function loadSentInTransitIds() {
@@ -76,11 +105,10 @@ const LizardMessages = (() => {
     saveSentInTransitIds(ids);
   }
 
-  function shouldApplySenderTransit(msg, currentUsername) {
-    if (!isOwnMessage(msg, currentUsername)) return false;
+  function isSenderInTransit(msg, currentUsername) {
     if (msg.status === 'revealed' || msg.content) return false;
-    const status = getEffectiveStatus(msg);
-    if (status === 'ready') return false;
+    if (getEffectiveStatus(msg) !== 'transit') return false;
+    if (!isOwnMessage(msg, currentUsername)) return false;
     return true;
   }
 
@@ -123,6 +151,7 @@ const LizardMessages = (() => {
   }
 
   function markReady(el) {
+    if (el.dataset.senderOwn === 'true') return;
     el.classList.remove('lizard-sender-transit');
     el.classList.add('lizard-ready');
     el.dataset.status = 'ready';
@@ -142,6 +171,7 @@ const LizardMessages = (() => {
 
   function clearSenderTransitVisual(el) {
     el.classList.remove('lizard-sender-transit');
+    delete el.dataset.senderOwn;
     el.querySelector('.lizard-progress')?.remove();
     el.querySelector('.lizard-ready-hint')?.remove();
     el.removeAttribute('role');
@@ -211,16 +241,23 @@ const LizardMessages = (() => {
     const { scroll = true } = options;
     const existing = container.querySelector(`[data-id="${msg.id}"]`);
     const isOwn = isOwnMessage(msg, currentUsername);
-    const senderTransit = shouldApplySenderTransit(msg, currentUsername);
+    const senderTransit = isSenderInTransit(msg, currentUsername);
 
     if (existing) {
       if (msg.status === 'revealed' || msg.content) {
         revealElement(existing, msg, isOwn);
       } else if (senderTransit) {
-        existing.classList.add('lizard-sender-transit');
+        existing.classList.add('own', 'lizard-sender-transit');
+        existing.classList.remove('other');
+        existing.dataset.senderOwn = 'true';
         updateProgressElement(existing, msg.created_at, true);
+        if (!tracked.has(existing)) {
+          tracked.set(existing, { createdAt: msg.created_at, senderOwn: true });
+          ensureTick();
+        }
       } else {
-        updateProgressElement(existing, msg.created_at, false);
+        const senderOwn = existing.dataset.senderOwn === 'true';
+        updateProgressElement(existing, msg.created_at, senderOwn);
       }
       return existing;
     }
@@ -355,6 +392,7 @@ const LizardMessages = (() => {
 
   return {
     setServerTime,
+    setStoredUsername,
     renderHistory,
     handleSent,
     handleRevealed,

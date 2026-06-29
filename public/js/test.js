@@ -134,14 +134,15 @@ async function connectPanel(panel) {
   }
 
   try {
-    await joinWithInvite(inviteCode, name);
+    const returnedUsername = await joinWithInvite(inviteCode, name);
+    panel.username = returnedUsername;
+    LizardMessages.setStoredUsername(returnedUsername);
   } catch (error) {
     setPanelStatus(panel, 'disconnected');
     alert(error.message);
     return;
   }
 
-  panel.username = name;
   panel.nameInput.disabled = true;
   panel.connectBtn.textContent = 'Reconnecter';
   panel.messageInput.disabled = false;
